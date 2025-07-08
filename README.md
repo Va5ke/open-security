@@ -1,3 +1,6 @@
+Projekat iz predmeta Razvoj bezbednog softvera, SIIT
+Tim 21
+
 Studenti:
 a) Milica Mišić, SV 62/2021
 b) Vasilije Marković, SV 15/2021

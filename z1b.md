@@ -4,7 +4,7 @@ Bitan alat u svakom kompleksnom informacionom sistemu koji garantuje pregled ist
 
 ## Osnovne stavke loga
 
-Kako bi prikazivao sve potrebne informacije, konvencija nalaže da log za određeni događaj sadrži sledeće stavke:
+Kako bi prikazivao sve potrebne informacije, konvencija nalaže da log za određeni događaj sadrži sledeća polja:
 
 1. Ime događaja – identifikuje događaj u sistemu  
 2. Poruka – ljudskim jezikom koncizno i razumljivo napisana informacija o događaju koji je nastao  
@@ -24,7 +24,10 @@ Radi postizanja integriteta, potrebno je obezbediti prava pristupa logovima malo
 
 Logrotate je primer mehanizma za rotiranje logova koji koristi Linuks. U sistemima gde se perzistencija logova ostvaruje skladištenjem u lokalni fajl sistem logrotate pomaže da se reši neizbežni problem pretrpavanja memorije na disku.
 
-Logrotate algoritam radi iterativno: na početku svakog ciklusa proverava da li je vreme za rotaciju (vreme za rotaciju se podešava u sistemu; može biti dnevno, nedeljno, mesečno...). Ukoliko jeste, stari log fajl se menja na osnovu strategije specificirane u konfiguraciji: create ili copytruncate. ¬Create preimenuje stari fajl i kreira novi u koji će pisati dalje logove, sa imenom koje je stari fajl nosio. Copytruncate kopira stari fajl, i iz originala briše ceo sadržaj kako bi mogao da piše u njega, dok kopija ima ulogu arhiviranog fajla. Obe strategije rezultuju u čišćenju prostora za pisanje novih logova, čuvajući sve prethodno zabeležene događaje.
+Logrotate algoritam radi iterativno: na početku svakog ciklusa proverava da li je vreme za rotaciju (vreme za rotaciju se podešava u sistemu; može biti dnevno, nedeljno, mesečno...). Ukoliko jeste, stari log fajl se menja na osnovu strategije specificirane u konfiguraciji: ```create``` ili ```copytruncate```.  
+```create``` preimenuje stari fajl i kreira novi u koji će pisati dalje logove, sa imenom koje je stari fajl nosio.  
+```opytruncate``` kopira stari fajl, i iz originala briše ceo sadržaj kako bi mogao da piše u njega, dok kopija ima ulogu arhiviranog fajla.  
+Obe strategije rezultuju u čišćenju prostora za pisanje novih logova, čuvajući sve prethodno zabeležene događaje.
 
 U zavisnosti od konfiguracije, oslobađanje prostora na disku logrotate može realizovati periodičnim kompresovanjem. Na svaku rotaciju, stari fajlovi se kompresuju u .gz format i jedino sveži log fajl ostaje nepromenjen. Takođe postoji opcija brisanja, gde se specificira koliko maksimalno fajlova sme da ostane na disku, dok se oni iz davne prošlosti odbacuju.
 

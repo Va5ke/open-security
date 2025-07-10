@@ -66,9 +66,7 @@ output {
 }
 ```
 
-Elasticsearch je distribuirani pretraživački i analitički engine koji čuva podatke u formi JSON dokumenata unutar indeksa. Omogućuje brzu pretragu nad velikim skupovima podataka po imenima polja.
-
-Za rad sa logovima indeksi su najčešće formirani po danu ili nedelji nastanka loga, radi efikasne pretrage logova po vremenu. Elasticsearch ima podršku Log4j 2, alat koji dodatno pomaže generisanju logova i daje mogućnost konfiguracije tri bitna svojstva: direktorijum u koji se logovi skladište, ime klastera (prefiks koji će svaki log fajl dobiti) i imena čvora (jedinstveno ime za svaki čvor u klasteru). U okviru Elasticsearch-a se može podesiti i port na kom trči (podrazumevani je localhost:9200).
+Elasticsearch je distribuirani pretraživački i analitički engine koji čuva podatke u formi JSON dokumenata unutar indeksa. Omogućuje brzu pretragu nad velikim skupovima podataka po imenima polja. Za rad sa logovima indeksi su najčešće formirani po danu ili nedelji nastanka loga, radi efikasne pretrage logova po vremenu. Elasticsearch ima podršku Log4j 2, alat koji dodatno pomaže generisanju logova i daje mogućnost konfiguracije tri bitna svojstva: direktorijum u koji se logovi skladište, ime klastera (prefiks koji će svaki log fajl dobiti) i imena čvora (jedinstveno ime za svaki čvor u klasteru). U okviru Elasticsearch-a se može podesiti i port na kom trči (podrazumevani je localhost:9200).
 
 Kibana je veb-aplikacija koja omogućuje interaktivno istraživanje, filtriranje i vizualizaciju podataka iz Elasticsearch-a. U opciji Discover korisnici mogu pretraživati logove pomoću fleksibilnih upita, filtrirati ih po poljima koja se nalaze u logu. Kibana nudi interaktivne i intuitivne grafikone za navigaciju kroz velike skupove podataka, podršku za rad sa mapama za geografske podatke, predefinisane filtere i agregacije za statistički pregled po histogramima, personalizovanje dashboard-ova i mnoge druge pogodnosti UI-a.
 

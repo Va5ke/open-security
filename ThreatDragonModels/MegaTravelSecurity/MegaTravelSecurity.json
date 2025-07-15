@@ -151,19 +151,6 @@
                   "new": false,
                   "number": 4,
                   "score": ""
-                },
-                {
-                  "id": "2b59d24e-40ce-4341-a08f-011de2803332",
-                  "title": "New STRIDE threat",
-                  "status": "Open",
-                  "severity": "TBD",
-                  "type": "Repudiation",
-                  "description": "Provide a description for this threat",
-                  "mitigation": "Provide remediation for this threat or a reason if status is N/A",
-                  "modelType": "STRIDE",
-                  "new": true,
-                  "number": 11,
-                  "score": ""
                 }
               ],
               "threatFrequency": {
@@ -294,13 +281,6 @@
               "storesCredentials": false,
               "storesInventory": false,
               "threats": []
-            },
-            "tools": {
-              "items": [
-                "boundary",
-                "button-remove"
-              ],
-              "name": null
             }
           },
           {

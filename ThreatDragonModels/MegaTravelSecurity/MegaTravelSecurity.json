@@ -413,12 +413,25 @@
                   "new": false,
                   "number": 13,
                   "score": "9"
+                },
+                {
+                  "id": "4654590f-5d34-4e40-8c29-7cd0e2621194",
+                  "title": "Trag izvršenih radnji",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Repudiation",
+                  "description": "Korisnik tvrdi da nije obavio neku akciju (npr. nije napravio neku rezervaciju).",
+                  "mitigation": "Logovanje zahteva sa session id-jem i timestamp-om.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 17,
+                  "score": "4"
                 }
               ],
               "threatFrequency": {
                 "spoofing": 0,
                 "tampering": 1,
-                "repudiation": 0,
+                "repudiation": 1,
                 "informationDisclosure": 0,
                 "denialOfService": 0,
                 "elevationOfPrivilege": 0
@@ -665,6 +678,10 @@
               "port": "22663acf-9c2e-4133-97da-8debab365abb"
             },
             "vertices": [
+              {
+                "x": 330,
+                "y": 460
+              },
               {
                 "x": 340,
                 "y": 440
@@ -1273,14 +1290,14 @@
                   "id": "5a97c575-8451-42c3-8152-83256a690fa6",
                   "title": "Krađa kolačića",
                   "status": "Open",
-                  "severity": "High",
+                  "severity": "Medium",
                   "type": "Information disclosure",
                   "description": "Krade kolačiće korisnika, koje posle može da iskoristi da čini akcije kao on.",
                   "mitigation": "Korišćenje HTTPS. Provera potpisa.\n",
                   "modelType": "STRIDE",
                   "new": false,
                   "number": 5,
-                  "score": ""
+                  "score": "5"
                 },
                 {
                   "id": "cea92c3e-02f3-4f7a-8430-b2abe9fee4d2",
@@ -1293,7 +1310,7 @@
                   "modelType": "STRIDE",
                   "new": false,
                   "number": 6,
-                  "score": ""
+                  "score": "8"
                 },
                 {
                   "id": "f51496c8-f68a-4813-a60d-069e947c6b8d",
@@ -1324,7 +1341,7 @@
               ],
               "threatFrequency": {
                 "tampering": 0,
-                "informationDisclosure": 3,
+                "informationDisclosure": 5,
                 "denialOfService": 1
               }
             },
@@ -2420,6 +2437,6 @@
     ],
     "diagramTop": 1,
     "reviewer": "",
-    "threatTop": 16
+    "threatTop": 17
   }
 }

@@ -151,6 +151,19 @@
                   "new": false,
                   "number": 4,
                   "score": ""
+                },
+                {
+                  "id": "2b59d24e-40ce-4341-a08f-011de2803332",
+                  "title": "New STRIDE threat",
+                  "status": "Open",
+                  "severity": "TBD",
+                  "type": "Repudiation",
+                  "description": "Provide a description for this threat",
+                  "mitigation": "Provide remediation for this threat or a reason if status is N/A",
+                  "modelType": "STRIDE",
+                  "new": true,
+                  "number": 11,
+                  "score": ""
                 }
               ],
               "threatFrequency": {
@@ -161,8 +174,8 @@
           },
           {
             "position": {
-              "x": 180,
-              "y": 520
+              "x": 220,
+              "y": 530
             },
             "size": {
               "width": 120,
@@ -418,22 +431,22 @@
               "privilegeLevel": "",
               "threats": [
                 {
-                  "id": "9f8330de-5c77-4191-b275-a534bd3e589f",
-                  "title": "Expedition",
+                  "id": "7dd30523-05a3-42f8-8280-3093401170d5",
+                  "title": "Web aplikacija omogućava običnim korisnicima pristup administratorskim funkcijama",
                   "status": "Open",
-                  "severity": "TBD",
-                  "type": "Spoofing",
-                  "description": "Napadač pošalje ",
-                  "mitigation": "Dodati CSRF token koji je validiran na serveru.",
+                  "severity": "Critical",
+                  "type": "Tampering",
+                  "description": "Loša kontrola pristupa omogućava običnim korisnicima pristup funkcijama koje su rezervisane za admina.",
+                  "mitigation": "Role-based access control (RBAC)",
                   "modelType": "STRIDE",
                   "new": false,
-                  "number": 7,
-                  "score": ""
+                  "number": 13,
+                  "score": "9"
                 }
               ],
               "threatFrequency": {
-                "spoofing": 1,
-                "tampering": 0,
+                "spoofing": 0,
+                "tampering": 1,
                 "repudiation": 0,
                 "informationDisclosure": 0,
                 "denialOfService": 0,
@@ -620,113 +633,8 @@
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
-                "targetMarker": {
-                  "name": "block"
-                },
-                "sourceMarker": {
-                  "name": ""
-                },
-                "strokeDasharray": null
-              }
-            },
-            "width": 200,
-            "height": 100,
-            "zIndex": 10,
-            "connector": "smooth",
-            "data": {
-              "type": "tm.Flow",
-              "name": "Query",
-              "description": "",
-              "outOfScope": false,
-              "isTrustBoundary": false,
-              "reasonOutOfScope": "",
-              "hasOpenThreats": false,
-              "isBidirectional": false,
-              "isEncrypted": false,
-              "isPublicNetwork": false,
-              "protocol": "",
-              "threats": []
-            },
-            "labels": [
-              "Query"
-            ],
-            "id": "d10730e0-625e-4bbd-9387-cfc41e0e9d02",
-            "source": {
-              "cell": "4c619827-4015-45a6-be96-07fbe2d1d256",
-              "port": "22663acf-9c2e-4133-97da-8debab365abb"
-            },
-            "target": {
-              "cell": "641b384e-276c-41b6-903c-d21ac91cfb96",
-              "port": "18993241-4076-4a0a-9daa-ddfac21fa30a"
-            },
-            "vertices": [
-              {
-                "x": 240,
-                "y": 420
-              },
-              {
-                "x": 210,
-                "y": 470
-              }
-            ]
-          },
-          {
-            "shape": "flow",
-            "attrs": {
-              "line": {
-                "stroke": "#333333",
-                "targetMarker": {
-                  "name": "block"
-                },
-                "sourceMarker": {
-                  "name": ""
-                },
-                "strokeDasharray": null
-              }
-            },
-            "width": 200,
-            "height": 100,
-            "zIndex": 10,
-            "connector": "smooth",
-            "data": {
-              "type": "tm.Flow",
-              "name": "Query Response",
-              "description": "",
-              "outOfScope": false,
-              "isTrustBoundary": false,
-              "reasonOutOfScope": "",
-              "hasOpenThreats": false,
-              "isBidirectional": false,
-              "isEncrypted": false,
-              "isPublicNetwork": false,
-              "protocol": "",
-              "threats": []
-            },
-            "labels": [
-              "Query Response"
-            ],
-            "id": "3f6a6d1b-1b59-4de3-9eaa-d036d9a3d1b3",
-            "source": {
-              "cell": "641b384e-276c-41b6-903c-d21ac91cfb96",
-              "port": "18993241-4076-4a0a-9daa-ddfac21fa30a"
-            },
-            "target": {
-              "cell": "4c619827-4015-45a6-be96-07fbe2d1d256",
-              "port": "22663acf-9c2e-4133-97da-8debab365abb"
-            },
-            "vertices": [
-              {
-                "x": 375,
-                "y": 460
-              }
-            ]
-          },
-          {
-            "shape": "flow",
-            "attrs": {
-              "line": {
-                "stroke": "#333333",
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -747,12 +655,102 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": true,
               "isEncrypted": false,
               "isPublicNetwork": false,
               "protocol": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "432a4d3a-ae72-4c40-914d-d3aa81c73837",
+                  "title": "Izmena podataka između Web aplikacije i baze",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Napadač presreće i menja SQL upite ili odgovore između aplikacije i baze (npr. SQL Injection).",
+                  "mitigation": "Korišćenje parametrizovanih upita\nValidacija korisničkog unosa\nSQL firewall (npr. MySQL Enterprise Firewall)",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 8,
+                  "score": "7"
+                }
+              ],
+              "threatFrequency": {
+                "tampering": 1,
+                "informationDisclosure": 0,
+                "denialOfService": 0
+              }
+            },
+            "labels": [
+              "Query (Response)"
+            ],
+            "id": "3f6a6d1b-1b59-4de3-9eaa-d036d9a3d1b3",
+            "source": {
+              "cell": "641b384e-276c-41b6-903c-d21ac91cfb96",
+              "port": "18993241-4076-4a0a-9daa-ddfac21fa30a"
+            },
+            "target": {
+              "cell": "4c619827-4015-45a6-be96-07fbe2d1d256",
+              "port": "22663acf-9c2e-4133-97da-8debab365abb"
+            },
+            "vertices": [
+              {
+                "x": 340,
+                "y": 440
+              }
+            ]
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "red",
+                "strokeWidth": 2.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Query (Response)",
+              "description": "",
+              "outOfScope": false,
+              "isTrustBoundary": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "isBidirectional": true,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "",
+              "threats": [
+                {
+                  "id": "f8efd7e6-b905-4306-987e-08542125e8c6",
+                  "title": "Neautorizovana upotreba javnog API-ja",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Napadač menja upite koje šaljemo API-ju ili odgovore koje nam vraća. Može da menja dostupnost i cene usluga.",
+                  "mitigation": "Koristiti autentifikaciju (OAuth, API key) i autorizaciju za svaki API poziv\nOgraničiti pozive po korisniku/IP adresi (rate limiting)\nValidacija svih ulaznih podataka\nMonitoring API saobraćaja i otkrivanje sumnjivih aktivnosti\nOgraničiti CORS politike ako se API koristi iz browsera",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 16,
+                  "score": "7"
+                }
+              ],
+              "threatFrequency": {
+                "tampering": 1,
+                "informationDisclosure": 0,
+                "denialOfService": 0
+              }
             },
             "labels": [
               "Query (Response)"
@@ -1231,18 +1229,23 @@
               "threats": [
                 {
                   "id": "2f59e388-fc05-496c-8376-0b4ce6788346",
-                  "title": "New STRIDE threat",
+                  "title": "Presretanje i izmena obaveštenja poslatih korisniku",
                   "status": "Open",
-                  "severity": "TBD",
+                  "severity": "Medium",
                   "type": "Tampering",
-                  "description": "Provide a description for this threat",
-                  "mitigation": "Provide remediation for this threat or a reason if status is N/A",
+                  "description": "Napadač presreće obaveštenje i menja njegov sadržaj. Time može da prevari korisnika i izazove paniku.",
+                  "mitigation": "Verifikacija izvora poruka pre nego što se obrade i pošalju korisnicima\nOgraničiti pristup Notification Service-u samo ovlašćenim komponentama (npr. Web App, Worker)\nLogging i auditing svih poslatih notifikacija\nDodavanje digitalnog potpisa ili HMAC da bi se proverio integritet poruka",
                   "modelType": "STRIDE",
-                  "new": true,
+                  "new": false,
                   "number": 2,
-                  "score": ""
+                  "score": "6"
                 }
-              ]
+              ],
+              "threatFrequency": {
+                "tampering": 2,
+                "informationDisclosure": 0,
+                "denialOfService": 0
+              }
             },
             "labels": [
               "Send Notification"
@@ -1256,7 +1259,12 @@
               "cell": "0daf87b8-5be3-412b-a087-b2f89b4fecc8",
               "port": "f2c54030-684c-46e8-9253-212bb7267fd0"
             },
-            "vertices": []
+            "vertices": [
+              {
+                "x": 880,
+                "y": 590
+              }
+            ]
           },
           {
             "shape": "flow",
@@ -1315,12 +1323,38 @@
                   "new": false,
                   "number": 6,
                   "score": ""
+                },
+                {
+                  "id": "f51496c8-f68a-4813-a60d-069e947c6b8d",
+                  "title": "Curenje korisničkih podataka kroz nešifrovanu komunikaciju",
+                  "status": "Open",
+                  "severity": "Critical",
+                  "type": "Information disclosure",
+                  "description": "Podaci kao što su imena, emailovi i kartični podaci mogu biti presretnuti.",
+                  "mitigation": "Obavezan HTTPS\nTLS 1.2+\nEnkripcija osetljivih podataka u bazi",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 9,
+                  "score": "9"
+                },
+                {
+                  "id": "7f319cfd-dc23-4950-8914-117f0f1a1157",
+                  "title": "Spamovanje HTTP zahteva na Web aplikaciju",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Denial of service",
+                  "description": "Napadač zatrpava server lažnim zahtevima, onemogućavajući normalnim korisnicima pristup.",
+                  "mitigation": "Rate limiting\nWeb Application Firewall (WAF)\nCAPTCHA",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 12,
+                  "score": "8"
                 }
               ],
               "threatFrequency": {
                 "tampering": 0,
-                "informationDisclosure": 2,
-                "denialOfService": 0
+                "informationDisclosure": 3,
+                "denialOfService": 1
               }
             },
             "labels": [
@@ -1337,8 +1371,8 @@
             },
             "vertices": [
               {
-                "x": 320,
-                "y": 190
+                "x": 300,
+                "y": 170
               },
               {
                 "x": 350,
@@ -2015,19 +2049,38 @@
               "storesInventory": false,
               "threats": [
                 {
-                  "id": "6028e241-e662-473c-8647-878b1a4a3470",
-                  "title": "New STRIDE threat",
+                  "id": "3b734e93-85ba-42d6-8ccc-7740d5c0a6d8",
+                  "title": "Spamovanje Queue",
                   "status": "Open",
-                  "severity": "TBD",
-                  "type": "Tampering",
-                  "description": "Provide a description for this threat",
-                  "mitigation": "Provide remediation for this threat or a reason if status is N/A",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "Queue servis (npr. RabbitMQ) je dostupan preko mreže (npr. otvoren port 5672), bez adekvatne autentifikacije i/ili restrikcija pristupa. Napadač može direktno slati poruke u queue, zaobilazeći validaciju u web aplikaciji. To može dovesti do preopterećenja sistema, DoS napada.",
+                  "mitigation": "Ograničiti pristup queue servisu samo na interne servise putem firewall pravila ili VPC mreže.\nOnemogućiti javni pristup queue portovima (npr. 5672 za RabbitMQ).\nUvesti autentifikaciju i autorizaciju za pristup queue-u.",
                   "modelType": "STRIDE",
-                  "new": true,
-                  "number": 1,
-                  "score": ""
+                  "new": false,
+                  "number": 14,
+                  "score": "6"
+                },
+                {
+                  "id": "14defba6-d0b5-4875-bee0-47089d6db157",
+                  "title": "Ubacivanje štetnih podataka",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Napadač može direktno slati poruke u queue, zaobilazeći validaciju u web aplikaciji.",
+                  "mitigation": "Onemogućiti javni pristup queue portovima (npr. 5672 za RabbitMQ).\nKorišćenje TLS za enkriptovanu komunikaciju između servisa.\nMonitoring dolaznih poruka i otkrivanje sumnjivih obrazaca.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 15,
+                  "score": "8"
                 }
-              ]
+              ],
+              "threatFrequency": {
+                "tampering": 1,
+                "repudiation": 0,
+                "informationDisclosure": 0,
+                "denialOfService": 2
+              }
             }
           },
           {
@@ -2396,6 +2449,6 @@
     ],
     "diagramTop": 1,
     "reviewer": "",
-    "threatTop": 7
+    "threatTop": 16
   }
 }

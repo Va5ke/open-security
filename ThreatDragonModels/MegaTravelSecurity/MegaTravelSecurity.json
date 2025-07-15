@@ -143,18 +143,18 @@
                   "id": "90efbfb8-da67-4c32-8bac-6f3fdcffa691",
                   "title": "Brute-force napad",
                   "status": "Open",
-                  "severity": "High",
+                  "severity": "Medium",
                   "type": "Spoofing",
                   "description": "Napadač isprobava sve moguće šifre dok ne uspe.",
                   "mitigation": "Duže šifre, korišćenje specijalnih karaktera i velikih slova.\nRate limiter.\n\n",
                   "modelType": "STRIDE",
                   "new": false,
                   "number": 4,
-                  "score": ""
+                  "score": "5"
                 }
               ],
               "threatFrequency": {
-                "spoofing": 3,
+                "spoofing": 4,
                 "repudiation": 0
               }
             }

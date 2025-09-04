@@ -6,10 +6,10 @@ Kao deo zadatka analizirana je aplikacija **TUDO**, koja je namerno ranjiva. Za 
 
 ProgPilot je prijavio dve ključne ranjivosti:
 
-- SQL injection u forgotusername.php
+- SQL injection u `forgotusername.php`
 ![alt text](img/forgot_username.png)
 
-- Reflected XSS u resetpassword.php
+- Reflected XSS u `resetpassword.php`
 ![alt text](img/reset_password.png)
 
 ## Opis *script*-a

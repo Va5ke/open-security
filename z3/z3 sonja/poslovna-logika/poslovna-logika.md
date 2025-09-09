@@ -151,7 +151,7 @@ Nakon toga, kupimo jaknu bez naknade.
 ### 5. Nedovoljna provera toka
 (_Lab: Insufficient workflow validation_)
 
-Zadatak je da kupimo jaknu ako znamo redosled akcija pri kupovini predstavlja manu u sistemu. Da bismo videli šta se dešava kada se transakcija uspešno obavi i da bismo se upoznali sa procesom, prvo se prijavimo na sistem i kupimo nešto što možemo da priuštimo. Prateći zahteve vidimo da originalni POST zahtev koji se šalje kad se potvrdi kupovina, vraća 302 - zahtev koji preusmerava na GET koji se šalje da potvrdi kupovinu. 
+Zadatak je da kupimo jaknu ako znamo da redosled akcija pri kupovini predstavlja manu u sistemu. Da bismo videli šta se dešava kada se transakcija uspešno obavi i da bismo se upoznali sa procesom, prvo se prijavimo na sistem i kupimo nešto što možemo da priuštimo. Prateći zahteve vidimo da originalni POST zahtev koji se šalje kad se potvrdi kupovina, vraća 302 - zahtev koji preusmerava na GET koji se šalje da potvrdi kupovinu. 
 
 ![image.png](lab5/1.png)
 

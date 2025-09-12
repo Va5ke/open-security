@@ -41,7 +41,7 @@ Ime na tviteru našli smo sa naloga iz drugog zadatka: **SakuraLoverAiko**.
 
 Za BSSID smo pretražili rešenja na internetu. Bilo je potrebno preko aplikacije Wigle dobiti sledeću MAC adresu: **84:af:ec:34:fc:f8**.
 
-## 5. Putovanje kući
+## 6. Putovanje kući
 
 Na prvoj slici s puta se u pozadini vidi Vašingtonski spomenik, kome je najblići aerodrom Washington National Airport - **DCA**.
 

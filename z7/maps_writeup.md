@@ -12,7 +12,7 @@ Koordinate su **45.1263863,19.2292279**.
 
 # Zadatak 2
 
-Prikazana je slika sa drona.
+Prikazana je slika iz vazduha.
 
 ![](img/mape2_1.jpg)
 

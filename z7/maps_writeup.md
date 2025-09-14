@@ -4,7 +4,7 @@ Prikazana je slika s ulice.
 
 ![](img/mape1_1.jpg)
 
-Pretraživanjem spomen-kuće Save Šumanovića (na putokazu), nalazimo da se nalazi u Šidu. Poredeći gde se ona nalazi u odnosu na manastir Svete Petke koji se lako nađe severno od Šida, tražene mesto je prva raskrsnica južno od spomen-kuće.
+Pretraživanjem spomen-kuće Save Šumanovića (na putokazu), nalazimo da je locirana u Šidu. Poredeći gde se ona nalazi u odnosu na manastir Svete Petke koji se lako nađe severno od Šida, tražene mesto je prva raskrsnica južno od spomen-kuće.
 
 ![](img/mape1_2.png)
 

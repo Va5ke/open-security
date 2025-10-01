@@ -26,6 +26,20 @@ class EncryptBody(BaseModel):
     algorithm: str
     plaintext_b64: str
 
+
+class SignBody(BaseModel):
+    key_id: int
+    algorithm: str
+    message_b64: str
+
+class VerifyBody(BaseModel):
+    key_id: int
+    algorithm: str
+    message_b64: str
+    signature_b64: str
+
+
+
 JWT_SECRET = "bakinatajna"
 JWT_ALGORITHM = "HS256"
 JWT_EXP_MINUTES = 60
@@ -337,7 +351,6 @@ def encrypt_data(body: EncryptBody, token_payload: dict = Depends(require_roles(
         return encryptRSA(rec, plaintext)
     else:
         raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
-
     
 @app.post("/api/hmac")
 def generate_hmac(body: HMACBody):
@@ -352,7 +365,7 @@ def generate_hmac(body: HMACBody):
     secret = aesgcm_decrypt(MASTER_KEY, r.encrypted_secret)
     mac = hmac.new(secret, body.message.encode(), hashlib.sha384).digest()
     mac_b64 = base64.b64encode(mac).decode()
-
+    
     log_action("GENERATE_HMAC", r.id, "algorithm=HMAC-SHA384")
     return {
         "key_id": r.id,
@@ -360,3 +373,74 @@ def generate_hmac(body: HMACBody):
         "message": body.message,
         "hmac_b64": mac_b64
     }
+
+def signRSA(rec, message: bytes):
+    if rec.kind != "ASYMMETRIC":
+        raise HTTPException(400, "Selected key is not asymmetric")
+
+    priv_bytes = aesgcm_decrypt(MASTER_KEY, rec.encrypted_secret)
+    private_key = serialization.load_der_private_key(priv_bytes, password=None)
+
+    sig = private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+
+    return {
+        "signature_b64": base64.b64encode(sig).decode(),
+        "algorithm": "RSA-PSS"
+    }
+
+@app.post("/api/sign")
+def sign_message(body: SignBody):
+    db = SessionLocal()
+    rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
+    db.close()
+    if not rec:
+        raise HTTPException(404, "Key not found")
+
+    if body.algorithm.upper() != "RSA-PSS":
+        raise HTTPException(400, "Unsupported algorithm. Use RSA-PSS")
+
+    message = base64.b64decode(body.message_b64)
+    return signRSA(rec, message)
+
+def verifyRSA(rec, message: bytes, signature: bytes):
+    if rec.kind != "ASYMMETRIC":
+        raise HTTPException(400, "Selected key is not asymmetric")
+
+    pub_bytes = base64.b64decode(rec.public_key)
+    public_key = serialization.load_der_public_key(pub_bytes)
+
+    try:
+        public_key.verify(
+            signature,
+            message,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        return {"valid": True}
+    except Exception:
+        return {"valid": False}
+    
+@app.post("/api/verify")
+def verify_message(body: VerifyBody):
+    db = SessionLocal()
+    rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
+    db.close()
+    if not rec:
+        raise HTTPException(404, "Key not found")
+
+    if body.algorithm.upper() != "RSA-PSS":
+        raise HTTPException(400, "Unsupported algorithm. Use RSA-PSS")
+
+    message = base64.b64decode(body.message_b64)
+    signature = base64.b64decode(body.signature_b64)
+    return verifyRSA(rec, message, signature)

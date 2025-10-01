@@ -1,4 +1,4 @@
-import os, base64, time, jwt
+import os, base64, time, jwt, hmac, hashlib
 from fastapi import FastAPI, HTTPException, Query, Header, Depends, Body
 from pydantic import BaseModel
 from typing import Optional
@@ -121,6 +121,10 @@ class CreateAsym(BaseModel):
 
 class RotateBody(BaseModel):
     new_master_key_b64: str
+
+class HMACBody(BaseModel):
+    key_id: int
+    message: str
 
 class TokenRequest(BaseModel):
     username: str
@@ -329,5 +333,26 @@ def encrypt_data(body: EncryptBody):
     else:
         raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
     
+@app.post("/api/hmac")
+def generate_hmac(body: HMACBody):
+    db = SessionLocal()
+    r = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
+    db.close()
+    if not r:
+        raise HTTPException(404, "Key not found")
+    if r.kind != "SYMMETRIC":
+        raise HTTPException(400, "HMAC requires a symmetric key")
+
+    secret = aesgcm_decrypt(MASTER_KEY, r.encrypted_secret)
+    mac = hmac.new(secret, body.message.encode(), hashlib.sha384).digest()
+    mac_b64 = base64.b64encode(mac).decode()
+
+    log_action("GENERATE_HMAC", r.id, "algorithm=HMAC-SHA384")
+    return {
+        "key_id": r.id,
+        "algorithm": "HMAC-SHA384",
+        "message": body.message,
+        "hmac_b64": mac_b64
+    }
 
 

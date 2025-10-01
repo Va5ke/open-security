@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Key Management UI (simple)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Inter,Segoe UI,Roboto,Arial; margin: 18px; color:#111; }
+    h1 { margin-bottom: 6px }
+    .section { border: 1px solid #e0e0e0; padding: 12px; margin: 12px 0; border-radius: 8px; }
+    label { display:block; margin-top:8px; font-size:0.95rem }
+    input, select, textarea { width:100%; padding:8px; margin-top:6px; box-sizing:border-box; }
+    button { margin-top:10px; padding:8px 12px; cursor:pointer; }
+    .row { display:flex; gap:8px; }
+    .col { flex:1; }
+    pre { background:#f7f7f7; padding:10px; overflow:auto; max-height:280px; border-radius:6px; }
+    small.gray { color:#666; }
+    .muted { color:#666; font-size:0.9rem }
+  </style>
+</head>
+<body>
+  <h1>Key Management</h1>
+  <p class="muted">Set API base URL below if your FastAPI server is not at <code>http://127.0.0.1:8000</code>.</p>
+
+  <div class="section">
+    <label>API Base URL
+      <input id="apiBase" type="text" value="http://127.0.0.1:8000" />
+    </label>
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;">
+        <label>Current token (stored in page)</label>
+        <input id="token" placeholder="No token yet" />
+      </div>
+      <div style="width:160px;">
+        <label>&nbsp;</label>
+        <button id="clearToken">Clear token</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Get test token</h3>
+    <div class="row">
+      <div class="col">
+        <label>Username <input id="tr_username" value="anonymous" /></label>
+        <label>Role
+          <select id="tr_role">
+            <option value="admin">admin</option>
+            <option value="user">user</option>
+          </select>
+        </label>
+      </div>
+      <div style="width:160px;align-self:end">
+        <button id="btnGetToken">Get token</button>
+      </div>
+    </div>
+    <small class="gray">Use this to generate a token for testing. Token is stored only in the page (not sent anywhere).</small>
+  </div>
+
+  <div class="section">
+    <h3>Key operations (admin)</h3>
+    <div style="display:flex;gap:12px;">
+      <div style="flex:1">
+        <label>Symmetric key name <input id="sym_name" /></label>
+        <label>Bits
+          <select id="sym_bits">
+            <option>256</option>
+            <option>192</option>
+            <option>128</option>
+          </select>
+        </label>
+        <button id="btnCreateSym">Create Symmetric</button>
+      </div>
+      <div style="flex:1">
+        <label>Asymmetric key name <input id="asym_name" /></label>
+        <label>Bits
+          <select id="asym_bits">
+            <option>2048</option>
+            <option>3072</option>
+            <option>4096</option>
+          </select>
+        </label>
+        <button id="btnCreateAsym">Create Asymmetric</button>
+      </div>
+    </div>
+
+    <hr />
+    <div style="display:flex;gap:12px;">
+      <div style="flex:1">
+        <button id="btnListKeys">List Keys</button>
+        <div id="keysList"></div>
+      </div>
+      <div style="flex:1">
+        <label>Key ID to fetch <input id="fetch_key_id" /></label>
+        <button id="btnFetchKey">Fetch Key</button>
+      </div>
+    </div>
+
+    <hr />
+    <div>
+      <label>Rotate key (provide Base64 new AES key — 32 bytes raw, base64-encoded)</label>
+      <div style="display:flex;gap:8px;">
+        <input id="rotate_key_id" placeholder="key id" />
+        <input id="rotate_new_b64" placeholder="new_key_b64" />
+        <button id="btnRotate">Rotate Key</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Crypto operations (user)</h3>
+    <div style="display:flex;gap:12px;">
+      <div style="flex:1">
+        <label>Key ID <input id="op_key_id" /></label>
+        <label>Algorithm
+          <select id="op_algorithm">
+            <option>AES-GCM-256</option>
+            <option>RSA-OAEP</option>
+          </select>
+        </label>
+        <label>Plaintext (text)
+          <textarea id="plaintext" rows="4">Hello world</textarea>
+        </label>
+        <button id="btnEncrypt">Encrypt</button>
+
+        <hr />
+        <label>HMAC message
+          <input id="hmac_message" />
+        </label>
+        <button id="btnHmac">Generate HMAC (SHA384)</button>
+      </div>
+
+      <div style="flex:1">
+        <label>Sign using key id <input id="sign_key_id" /></label>
+        <label>Message to sign (text)
+          <textarea id="sign_message" rows="3">Sign me</textarea>
+        </label>
+        <button id="btnSign">Sign (RSA-PSS)</button>
+
+        <hr />
+        <label>Verify with key id <input id="verify_key_id" /></label>
+        <label>Message to verify
+          <textarea id="verify_message" rows="3">Sign me</textarea>
+        </label>
+        <label>Signature (base64)
+          <input id="verify_signature_b64" />
+        </label>
+        <button id="btnVerify">Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Logs & response</h3>
+    <pre id="out">Ready.</pre>
+  </div>
+
+<script>
+/*
+  Simple UI script that calls your FastAPI endpoints.
+  Adjust API_BASE if your server runs elsewhere.
+*/
+const out = document.getElementById('out');
+
+function log(v){
+  console.log(v);
+  out.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+}
+
+function apiUrl(path){
+  return (document.getElementById('apiBase').value.replace(/\/+$/,'') || 'http://127.0.0.1:8000') + path;
+}
+
+function getTokenFromInput(){
+  return document.getElementById('token').value.trim();
+}
+
+function authHeaders(){
+  const token = getTokenFromInput();
+  return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+// UTF-8 safe base64
+function base64EncodeUtf8(str){
+  // convert to Uint8Array, then to base64
+  const utf8 = new TextEncoder().encode(str);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i=0; i<utf8.length; i+=chunk){
+    binary += String.fromCharCode.apply(null, Array.from(utf8.subarray(i, i+chunk)));
+  }
+  return btoa(binary);
+}
+
+function base64DecodeUtf8(b64){
+  const binary = atob(b64);
+  const bytes = new Uint8Array([...binary].map(ch => ch.charCodeAt(0)));
+  return new TextDecoder().decode(bytes);
+}
+
+// --- Token generation ---
+document.getElementById('btnGetToken').addEventListener('click', async () => {
+  const username = document.getElementById('tr_username').value || 'user';
+  const role = document.getElementById('tr_role').value;
+  const url = apiUrl('/api/token');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, role })
+    });
+    const data = await res.json();
+    if (!res.ok) { log({ error: data }); return; }
+    document.getElementById('token').value = data.token;
+    log({ msg: 'Token received', token: data.token });
+  } catch(err){ log(err); }
+});
+
+document.getElementById('clearToken').addEventListener('click', () => {
+  document.getElementById('token').value = '';
+  log('Token cleared');
+});
+
+// --- Create symmetric ---
+document.getElementById('btnCreateSym').addEventListener('click', async () => {
+  const name = document.getElementById('sym_name').value || undefined;
+  const bits = Number(document.getElementById('sym_bits').value || 256);
+  const url = apiUrl('/api/keys/symmetric');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name, bits })
+    });
+    const data = await res.json();
+    log({ create_sym: data });
+  } catch(err){ log(err); }
+});
+
+// --- Create asymmetric ---
+document.getElementById('btnCreateAsym').addEventListener('click', async () => {
+  const name = document.getElementById('asym_name').value || undefined;
+  const bits = Number(document.getElementById('asym_bits').value || 2048);
+  const url = apiUrl('/api/keys/asymmetric');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name, bits })
+    });
+    const data = await res.json();
+    log({ create_asym: data });
+  } catch(err){ log(err); }
+});
+
+// --- List keys ---
+document.getElementById('btnListKeys').addEventListener('click', async () => {
+  const url = apiUrl('/api/keys');
+  try {
+    const res = await fetch(url, { headers: { ...authHeaders() } });
+    const data = await res.json();
+    log(data);
+    const container = document.getElementById('keysList');
+    container.innerHTML = '';
+    if (Array.isArray(data)) {
+      data.forEach(k => {
+        const div = document.createElement('div');
+        div.style.borderTop = '1px solid #eee';
+        div.style.padding = '8px 0';
+        div.innerHTML = `<strong>[${k.id}]</strong> ${k.name} — ${k.kind} — ${k.algorithm} <span class="muted">created ${k.created_at}</span>`;
+        const btn = document.createElement('button');
+        btn.textContent = 'Fetch (metadata)';
+        btn.style.marginLeft = '8px';
+        btn.addEventListener('click', () => {
+          document.getElementById('fetch_key_id').value = k.id;
+          document.getElementById('btnFetchKey').click();
+        });
+        
+        div.appendChild(btn);
+        container.appendChild(div);
+      });
+    }
+  } catch(err){ log(err); }
+});
+
+// --- Fetch single key ---
+document.getElementById('btnFetchKey').addEventListener('click', async () => {
+  const id = document.getElementById('fetch_key_id').value;
+  if (!id) { log('set key id'); return; }
+  const url = apiUrl(`/api/keys/${encodeURIComponent(id)}`);
+  try {
+    const res = await fetch(url, { headers: { ...authHeaders() } });
+    const data = await res.json();
+    log({ fetch_key: data });
+  } catch(err){ log(err); }
+});
+
+// --- Rotate key ---
+document.getElementById('btnRotate').addEventListener('click', async () => {
+  const id = document.getElementById('rotate_key_id').value;
+  const new_b64 = document.getElementById('rotate_new_b64').value;
+  if (!id || !new_b64) { log('set key id and new_key_b64'); return; }
+  const url = apiUrl(`/api/keys/${encodeURIComponent(id)}/rotate`);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ new_key_b64: new_b64 })
+    });
+    const data = await res.json();
+    log({ rotate: data });
+  } catch(err){ log(err); }
+});
+
+// --- Encrypt ---
+document.getElementById('btnEncrypt').addEventListener('click', async () => {
+  const key_id = Number(document.getElementById('op_key_id').value);
+  const algorithm = document.getElementById('op_algorithm').value;
+  const plaintext = document.getElementById('plaintext').value || '';
+  if (!key_id) { log('set key id'); return; }
+  const plaintext_b64 = base64EncodeUtf8(plaintext);
+  const url = apiUrl('/api/encrypt');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ key_id, plaintext_b64, algorithm })
+    });
+    const data = await res.json();
+    log({ encrypt: data });
+  } catch(err){ log(err); }
+});
+
+// --- HMAC ---
+document.getElementById('btnHmac').addEventListener('click', async () => {
+  const key_id = Number(document.getElementById('op_key_id').value);
+  const message = document.getElementById('hmac_message').value;
+  if (!key_id) { log('set key id'); return; }
+  const url = apiUrl('/api/hmac');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ key_id, message })
+    });
+    const data = await res.json();
+    log({ hmac: data });
+  } catch(err){ log(err); }
+});
+
+// --- Sign ---
+document.getElementById('btnSign').addEventListener('click', async () => {
+  const key_id = Number(document.getElementById('sign_key_id').value);
+  const msg = document.getElementById('sign_message').value || '';
+  if (!key_id) { log('set sign key id'); return; }
+  const message_b64 = base64EncodeUtf8(msg);
+  const url = apiUrl('/api/sign');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ key_id, message_b64, algorithm: 'RSA-PSS' })
+    });
+    const data = await res.json();
+    log({ sign: data });
+  } catch(err){ log(err); }
+});
+
+// --- Verify ---
+document.getElementById('btnVerify').addEventListener('click', async () => {
+  const key_id = Number(document.getElementById('verify_key_id').value);
+  const msg = document.getElementById('verify_message').value || '';
+  const signature_b64 = document.getElementById('verify_signature_b64').value || '';
+  if (!key_id) { log('set verify key id'); return; }
+  if (!signature_b64) { log('set signature'); return; }
+  const message_b64 = base64EncodeUtf8(msg);
+  const url = apiUrl('/api/verify');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ key_id, message_b64, signature_b64, algorithm: 'RSA-PSS' })
+    });
+    const data = await res.json();
+    log({ verify: data });
+  } catch(err){ log(err); }
+});
+
+</script>
+</body>
+</html>

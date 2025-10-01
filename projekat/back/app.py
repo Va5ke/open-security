@@ -1,5 +1,6 @@
 import os, base64, time, jwt, hmac, hashlib
 from fastapi import FastAPI, HTTPException, Query, Header, Depends, Body
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
@@ -98,6 +99,13 @@ if len(MASTER_KEY) != 32:
     raise RuntimeError("MASTER_KEY_B64 must decode to 32 bytes (AES-256).")
 
 app = FastAPI(title="Key Management API (Postgres)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # you can restrict later e.g. ["http://127.0.0.1:5500"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def log_action(action: str, username: str, key_id: int = None, details: str = None):
     db = SessionLocal()
@@ -153,8 +161,8 @@ def get_token(req: TokenRequest = Body(...)):
 @app.post("/api/keys/symmetric")
 def create_symmetric(body: CreateSym, token_payload: dict = Depends(require_roles(["admin"]))):
     bits = body.bits or 256
-    if bits not in (128, 192, 256):
-        raise HTTPException(400, "bits must be 128, 192, or 256")
+    if bits!=256:
+        raise HTTPException(400, "bits must be 256")
     key_bytes = os.urandom(bits // 8)
     enc = aesgcm_encrypt(MASTER_KEY, key_bytes)
     rec = KeyRecord(
@@ -196,7 +204,7 @@ def create_asymmetric(body: CreateAsym, token_payload: dict = Depends(require_ro
     return {"id": rec.id, "name": rec.name, "kind": rec.kind, "algorithm": rec.algorithm, "created_at": rec.created_at}
 
 @app.get("/api/keys")
-def list_keys(token_payload: dict = Depends(require_roles(["admin"]))):
+def list_keys(token_payload: dict = Depends(require_roles(["admin", "user"]))):
     db = SessionLocal()
     rows = db.query(KeyRecord).all()
     out = [
@@ -215,31 +223,19 @@ def list_keys(token_payload: dict = Depends(require_roles(["admin"]))):
     return out
 
 @app.get("/api/keys/{key_id}")
-def get_key(key_id: int, reveal: bool = Query(False), token_payload: dict = Depends(require_roles(["admin"]))):
+def get_key(key_id: int, token_payload: dict = Depends(require_roles(["admin"]))):
     db = SessionLocal()
     r = db.query(KeyRecord).filter(KeyRecord.id == key_id).first()
     db.close()
     username = token_payload["username"]
     if not r:
         raise HTTPException(404, "Not found")
-    if not reveal:
-        log_action("GET_KEY_METADATA", username, r.id)
-        return {
-            "id": r.id,
-            "name": r.name,
-            "kind": r.kind,
-            "algorithm": r.algorithm,
-            "public_key": r.public_key,
-            "created_at": r.created_at
-        }
-    secret = aesgcm_decrypt(MASTER_KEY, r.encrypted_secret)
-    log_action("REVEAL_KEY", username, r.id)
+    log_action("GET_KEY_METADATA", username, r.id)
     return {
         "id": r.id,
         "name": r.name,
         "kind": r.kind,
         "algorithm": r.algorithm,
-        "decrypted_secret_b64": base64.b64encode(secret).decode(),
         "public_key": r.public_key,
         "created_at": r.created_at
     }
@@ -400,7 +396,7 @@ def sign_message(body: SignBody, token_payload: dict = Depends(require_roles(["u
         raise HTTPException(400, "Unsupported algorithm. Use RSA-PSS")
 
     message = base64.b64decode(body.message_b64)
-    username = token_payload("username")
+    username = token_payload["username"]
     log_action("SIGN_RSA", username, body.key_id, f"message={body.message_b64}")
     return signRSA(rec, message)
 

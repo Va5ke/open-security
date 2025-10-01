@@ -2,14 +2,15 @@ import os, base64, time, jwt
 from fastapi import FastAPI, HTTPException, Query, Header, Depends, Body
 from pydantic import BaseModel
 from typing import Optional
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 from typing import List
 from datetime import datetime, timedelta
+
 
 MASTER_KEY_B64 = "OAn1NzvF8BSeHVc4I85m9XVRpGm8T8KpAfD7TqgmXfE="
 # DATABASE_URL = "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms"
@@ -18,6 +19,12 @@ DATABASE_URL = "postgresql+psycopg2://postgres:njusko123@localhost:5432/kms"
 engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
+
+
+class EncryptBody(BaseModel):
+    key_id: int
+    algorithm: str
+    plaintext_b64: str
 
 JWT_SECRET = "bakinatajna"
 JWT_ALGORITHM = "HS256"
@@ -39,6 +46,7 @@ def require_roles(allowed_roles: List[str]):
         return payload
     return dependency
 
+
 class KeyRecord(Base):
     __tablename__ = "keys"
     id = Column(Integer, primary_key=True, index=True)
@@ -49,6 +57,21 @@ class KeyRecord(Base):
     public_key = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+
+class KeyVersion(Base):
+    __tablename__ = "key_versions"
+    id = Column(Integer, primary_key=True, index=True)
+    key_id = Column(Integer, ForeignKey("keys.id"), nullable=False)
+    version = Column(Integer, nullable=False)
+    encrypted_secret = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    key = relationship("KeyRecord", back_populates="versions")
+
+KeyRecord.versions = relationship("KeyVersion", back_populates="key", cascade="all, delete-orphan")
+
+
 class AuditLog(Base):
     __tablename__ = "logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -56,6 +79,7 @@ class AuditLog(Base):
     key_id = Column(Integer, nullable=True)    
     timestamp = Column(DateTime, default=datetime.now())
     details = Column(Text, nullable=True)
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -204,3 +228,106 @@ def get_key(key_id: int, reveal: bool = Query(False), _: dict = Depends(require_
         "public_key": r.public_key,
         "created_at": r.created_at
     }
+
+
+@app.post("/api/keys/{key_id}/rotate")
+def rotate_key(key_id: int, body: RotateBody):
+    new_master_key = base64.b64decode(body.new_master_key_b64)
+    if len(new_master_key) != 32:
+        raise HTTPException(400, "new_master_key_b64 must be 32 bytes (AES-256)")
+
+    db = SessionLocal()
+    rec = db.query(KeyRecord).filter(KeyRecord.id == key_id).first()
+    if not rec:
+        db.close()
+        raise HTTPException(404, "Key not found")
+
+    # Save old encrypted secret into versions
+    old_version_count = db.query(KeyVersion).filter(KeyVersion.key_id == rec.id).count()
+    old_version = KeyVersion(
+        key_id=rec.id,
+        version=old_version_count + 1,
+        encrypted_secret=rec.encrypted_secret
+    )
+    db.add(old_version)
+
+    secret = aesgcm_decrypt(MASTER_KEY, rec.encrypted_secret)
+
+    new_enc = aesgcm_encrypt(new_master_key, secret)
+    rec.encrypted_secret = new_enc
+
+    db.commit()
+    db.refresh(rec)
+    db.close()
+
+    return {
+        "id": rec.id,
+        "name": rec.name,
+        "kind": rec.kind,
+        "algorithm": rec.algorithm,
+        "rotated_at": datetime.now()
+    }
+
+
+def encryptAES(rec, plaintext):
+    if rec.kind != "SYMMETRIC":
+        raise HTTPException(400, "Selected key is not symmetric")
+
+    secret = aesgcm_decrypt(MASTER_KEY, rec.encrypted_secret)
+    if len(secret) != 32:
+        raise HTTPException(400, "Key material is not 256-bit AES")
+
+    aesgcm = AESGCM(secret)
+    nonce = os.urandom(12)
+    ct = aesgcm.encrypt(nonce, plaintext, None)
+    return {
+        "ciphertext_b64": base64.b64encode(nonce + ct).decode(),
+        "algorithm": "AES-GCM-256"
+    }
+
+
+def encryptRSA(rec, plaintext):
+    if rec.kind != "ASYMMETRIC":
+        raise HTTPException(400, "Selected key is not asymmetric")
+    
+    if not rec.public_key:
+        raise HTTPException(400, "No public key stored for this key record")
+
+    try:
+        pub_bytes = base64.b64decode(rec.public_key)
+    except Exception as e:
+        raise HTTPException(500, f"public_key is not valid base64: {e}")
+    pub = serialization.load_der_public_key(pub_bytes)
+
+    ct = pub.encrypt(
+        plaintext,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    return {
+        "ciphertext_b64": base64.b64encode(ct).decode(),
+        "algorithm": "RSA-OAEP"
+    }
+
+
+@app.post("/api/encrypt")
+def encrypt_data(body: EncryptBody):
+    db = SessionLocal()
+    rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
+    db.close()
+    if not rec: raise HTTPException(404, "Key not found")
+
+    plaintext = base64.b64decode(body.plaintext_b64)
+
+    if body.algorithm.upper() == "AES-GCM-256":
+        return encryptAES(rec, plaintext)
+    elif body.algorithm.upper() == "RSA-OAEP":
+        return encryptRSA(rec, plaintext)
+    else:
+        raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
+    
+
+

@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 
 
 MASTER_KEY_B64 = "OAn1NzvF8BSeHVc4I85m9XVRpGm8T8KpAfD7TqgmXfE="
-# DATABASE_URL = "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms"
-DATABASE_URL = "postgresql+psycopg2://postgres:njusko123@localhost:5432/kms"
+DATABASE_URL = "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms"
+# DATABASE_URL = "postgresql+psycopg2://postgres:njusko123@localhost:5432/kms"
 
 engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -79,6 +79,7 @@ class AuditLog(Base):
     key_id = Column(Integer, nullable=True)    
     timestamp = Column(DateTime, default=datetime.now())
     details = Column(Text, nullable=True)
+    username = Column(Text)
 
 
 Base.metadata.create_all(bind=engine)
@@ -92,9 +93,9 @@ if len(MASTER_KEY) != 32:
 
 app = FastAPI(title="Key Management API (Postgres)")
 
-def log_action(action: str, key_id: int = None, details: str = None):
+def log_action(action: str, username: str, key_id: int = None, details: str = None):
     db = SessionLocal()
-    log = AuditLog(action=action, key_id=key_id, details=details)
+    log = AuditLog(action=action, key_id=key_id, details=details, username=username)
     db.add(log)
     db.commit()
     db.close()
@@ -120,7 +121,7 @@ class CreateAsym(BaseModel):
     bits: Optional[int] = 2048
 
 class RotateBody(BaseModel):
-    new_master_key_b64: str
+    new_key_b64: str
 
 class TokenRequest(BaseModel):
     username: str
@@ -128,7 +129,7 @@ class TokenRequest(BaseModel):
 
 @app.post("/api/token")
 def get_token(req: TokenRequest = Body(...)):
-    if req.role not in ["admin", "viewer"]:
+    if req.role not in ["admin", "user"]:
         raise HTTPException(400, "Role must be 'admin' or 'viewer'")
     
     payload = {
@@ -140,7 +141,7 @@ def get_token(req: TokenRequest = Body(...)):
     return {"token": token}
 
 @app.post("/api/keys/symmetric")
-def create_symmetric(body: CreateSym, _: dict = Depends(require_roles(["admin"]))):
+def create_symmetric(body: CreateSym, token_payload: dict = Depends(require_roles(["admin"]))):
     bits = body.bits or 256
     if bits not in (128, 192, 256):
         raise HTTPException(400, "bits must be 128, 192, or 256")
@@ -153,11 +154,12 @@ def create_symmetric(body: CreateSym, _: dict = Depends(require_roles(["admin"])
         encrypted_secret=enc
     )
     db = SessionLocal(); db.add(rec); db.commit(); db.refresh(rec); db.close()
-    log_action("CREATE_KEY", rec.id, f"algorithm={rec.algorithm}")
+    username = token_payload["username"]
+    log_action("CREATE_KEY", username, rec.id, f"algorithm={rec.algorithm}")
     return {"id": rec.id, "name": rec.name, "kind": rec.kind, "algorithm": rec.algorithm, "created_at": rec.created_at}
 
 @app.post("/api/keys/asymmetric")
-def create_asymmetric(body: CreateAsym, _: dict = Depends(require_roles(["admin"]))):
+def create_asymmetric(body: CreateAsym, token_payload: dict = Depends(require_roles(["admin"]))):
     bits = body.bits or 2048
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=bits)
     priv_bytes = private_key.private_bytes(
@@ -179,11 +181,12 @@ def create_asymmetric(body: CreateAsym, _: dict = Depends(require_roles(["admin"
         public_key=base64.b64encode(pub_bytes).decode()
     )
     db = SessionLocal(); db.add(rec); db.commit(); db.refresh(rec); db.close()
-    log_action("CREATE_KEY", rec.id, f"algorithm={rec.algorithm}")
+    username = token_payload["username"]
+    log_action("CREATE_KEY", username, rec.id, f"algorithm={rec.algorithm}")
     return {"id": rec.id, "name": rec.name, "kind": rec.kind, "algorithm": rec.algorithm, "created_at": rec.created_at}
 
 @app.get("/api/keys")
-def list_keys(_: dict = Depends(require_roles(["admin"]))):
+def list_keys(token_payload: dict = Depends(require_roles(["admin"]))):
     db = SessionLocal()
     rows = db.query(KeyRecord).all()
     out = [
@@ -197,18 +200,20 @@ def list_keys(_: dict = Depends(require_roles(["admin"]))):
         } for r in rows
     ]
     db.close()
-    log_action("LIST_KEYS", details=f"count={len(out)}")
+    username = token_payload["username"]
+    log_action("LIST_KEYS", username, details=f"count={len(out)}")
     return out
 
 @app.get("/api/keys/{key_id}")
-def get_key(key_id: int, reveal: bool = Query(False), _: dict = Depends(require_roles(["admin"]))):
+def get_key(key_id: int, reveal: bool = Query(False), token_payload: dict = Depends(require_roles(["admin"]))):
     db = SessionLocal()
     r = db.query(KeyRecord).filter(KeyRecord.id == key_id).first()
     db.close()
+    username = token_payload["username"]
     if not r:
         raise HTTPException(404, "Not found")
     if not reveal:
-        log_action("GET_KEY_METADATA", r.id)
+        log_action("GET_KEY_METADATA", username, r.id)
         return {
             "id": r.id,
             "name": r.name,
@@ -218,7 +223,7 @@ def get_key(key_id: int, reveal: bool = Query(False), _: dict = Depends(require_
             "created_at": r.created_at
         }
     secret = aesgcm_decrypt(MASTER_KEY, r.encrypted_secret)
-    log_action("REVEAL_KEY", r.id)
+    log_action("REVEAL_KEY", username, r.id)
     return {
         "id": r.id,
         "name": r.name,
@@ -229,12 +234,11 @@ def get_key(key_id: int, reveal: bool = Query(False), _: dict = Depends(require_
         "created_at": r.created_at
     }
 
-
 @app.post("/api/keys/{key_id}/rotate")
-def rotate_key(key_id: int, body: RotateBody):
-    new_master_key = base64.b64decode(body.new_master_key_b64)
-    if len(new_master_key) != 32:
-        raise HTTPException(400, "new_master_key_b64 must be 32 bytes (AES-256)")
+def rotate_key(key_id: int, body: RotateBody, token_payload: dict = Depends(require_roles(["admin"]))):
+    new_key = base64.b64decode(body.new_key_b64)
+    if len(new_key) != 32:
+        raise HTTPException(400, "new_key_b64 must be 32 bytes (AES-256)")
 
     db = SessionLocal()
     rec = db.query(KeyRecord).filter(KeyRecord.id == key_id).first()
@@ -242,7 +246,6 @@ def rotate_key(key_id: int, body: RotateBody):
         db.close()
         raise HTTPException(404, "Key not found")
 
-    # Save old encrypted secret into versions
     old_version_count = db.query(KeyVersion).filter(KeyVersion.key_id == rec.id).count()
     old_version = KeyVersion(
         key_id=rec.id,
@@ -253,12 +256,14 @@ def rotate_key(key_id: int, body: RotateBody):
 
     secret = aesgcm_decrypt(MASTER_KEY, rec.encrypted_secret)
 
-    new_enc = aesgcm_encrypt(new_master_key, secret)
+    new_enc = aesgcm_encrypt(new_key, secret)
     rec.encrypted_secret = new_enc
 
     db.commit()
     db.refresh(rec)
     db.close()
+    username = token_payload["username"]
+    log_action("ROTATE_KEY", username, key_id, body.new_master_key_b64)
 
     return {
         "id": rec.id,
@@ -267,7 +272,6 @@ def rotate_key(key_id: int, body: RotateBody):
         "algorithm": rec.algorithm,
         "rotated_at": datetime.now()
     }
-
 
 def encryptAES(rec, plaintext):
     if rec.kind != "SYMMETRIC":
@@ -284,7 +288,6 @@ def encryptAES(rec, plaintext):
         "ciphertext_b64": base64.b64encode(nonce + ct).decode(),
         "algorithm": "AES-GCM-256"
     }
-
 
 def encryptRSA(rec, plaintext):
     if rec.kind != "ASYMMETRIC":
@@ -312,9 +315,8 @@ def encryptRSA(rec, plaintext):
         "algorithm": "RSA-OAEP"
     }
 
-
 @app.post("/api/encrypt")
-def encrypt_data(body: EncryptBody):
+def encrypt_data(body: EncryptBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -322,12 +324,12 @@ def encrypt_data(body: EncryptBody):
 
     plaintext = base64.b64decode(body.plaintext_b64)
 
+    username = token_payload["username"]
     if body.algorithm.upper() == "AES-GCM-256":
+        log_action("ENRCYPT_AES", username, body.key_id, body.plaintext_b64)
         return encryptAES(rec, plaintext)
     elif body.algorithm.upper() == "RSA-OAEP":
+        log_action("ENRCYPT_RSA", username, body.key_id, body.plaintext_b64)
         return encryptRSA(rec, plaintext)
     else:
         raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
-    
-
-

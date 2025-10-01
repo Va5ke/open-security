@@ -1,5 +1,6 @@
 import os, base64, time, jwt, hmac, hashlib
 from fastapi import FastAPI, HTTPException, Query, Header, Depends, Body
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
@@ -20,12 +21,10 @@ engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
-
 class EncryptBody(BaseModel):
     key_id: int
     algorithm: str
     plaintext_b64: str
-
 
 class SignBody(BaseModel):
     key_id: int
@@ -37,8 +36,6 @@ class VerifyBody(BaseModel):
     algorithm: str
     message_b64: str
     signature_b64: str
-
-
 
 JWT_SECRET = "bakinatajna"
 JWT_ALGORITHM = "HS256"
@@ -71,8 +68,6 @@ class KeyRecord(Base):
     public_key = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-
-
 class KeyVersion(Base):
     __tablename__ = "key_versions"
     id = Column(Integer, primary_key=True, index=True)
@@ -85,7 +80,6 @@ class KeyVersion(Base):
 
 KeyRecord.versions = relationship("KeyVersion", back_populates="key", cascade="all, delete-orphan")
 
-
 class AuditLog(Base):
     __tablename__ = "logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -94,7 +88,6 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=datetime.now())
     details = Column(Text, nullable=True)
     username = Column(Text)
-
 
 Base.metadata.create_all(bind=engine)
 
@@ -106,6 +99,13 @@ if len(MASTER_KEY) != 32:
     raise RuntimeError("MASTER_KEY_B64 must decode to 32 bytes (AES-256).")
 
 app = FastAPI(title="Key Management API (Postgres)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # you can restrict later e.g. ["http://127.0.0.1:5500"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def log_action(action: str, username: str, key_id: int = None, details: str = None):
     db = SessionLocal()
@@ -161,8 +161,8 @@ def get_token(req: TokenRequest = Body(...)):
 @app.post("/api/keys/symmetric")
 def create_symmetric(body: CreateSym, token_payload: dict = Depends(require_roles(["admin"]))):
     bits = body.bits or 256
-    if bits not in (128, 192, 256):
-        raise HTTPException(400, "bits must be 128, 192, or 256")
+    if bits!=256:
+        raise HTTPException(400, "bits must be 256")
     key_bytes = os.urandom(bits // 8)
     enc = aesgcm_encrypt(MASTER_KEY, key_bytes)
     rec = KeyRecord(
@@ -204,7 +204,7 @@ def create_asymmetric(body: CreateAsym, token_payload: dict = Depends(require_ro
     return {"id": rec.id, "name": rec.name, "kind": rec.kind, "algorithm": rec.algorithm, "created_at": rec.created_at}
 
 @app.get("/api/keys")
-def list_keys(token_payload: dict = Depends(require_roles(["admin"]))):
+def list_keys(token_payload: dict = Depends(require_roles(["admin", "user"]))):
     db = SessionLocal()
     rows = db.query(KeyRecord).all()
     out = [
@@ -223,31 +223,19 @@ def list_keys(token_payload: dict = Depends(require_roles(["admin"]))):
     return out
 
 @app.get("/api/keys/{key_id}")
-def get_key(key_id: int, reveal: bool = Query(False), token_payload: dict = Depends(require_roles(["admin"]))):
+def get_key(key_id: int, token_payload: dict = Depends(require_roles(["admin"]))):
     db = SessionLocal()
     r = db.query(KeyRecord).filter(KeyRecord.id == key_id).first()
     db.close()
     username = token_payload["username"]
     if not r:
         raise HTTPException(404, "Not found")
-    if not reveal:
-        log_action("GET_KEY_METADATA", username, r.id)
-        return {
-            "id": r.id,
-            "name": r.name,
-            "kind": r.kind,
-            "algorithm": r.algorithm,
-            "public_key": r.public_key,
-            "created_at": r.created_at
-        }
-    secret = aesgcm_decrypt(MASTER_KEY, r.encrypted_secret)
-    log_action("REVEAL_KEY", username, r.id)
+    log_action("GET_KEY_METADATA", username, r.id)
     return {
         "id": r.id,
         "name": r.name,
         "kind": r.kind,
         "algorithm": r.algorithm,
-        "decrypted_secret_b64": base64.b64encode(secret).decode(),
         "public_key": r.public_key,
         "created_at": r.created_at
     }
@@ -281,7 +269,7 @@ def rotate_key(key_id: int, body: RotateBody, token_payload: dict = Depends(requ
     db.refresh(rec)
     db.close()
     username = token_payload["username"]
-    log_action("ROTATE_KEY", username, key_id, body.new_master_key_b64)
+    log_action("ROTATE_KEY", username, key_id, f"new key={body.new_key_b64}")
 
     return {
         "id": rec.id,
@@ -344,16 +332,16 @@ def encrypt_data(body: EncryptBody, token_payload: dict = Depends(require_roles(
 
     username = token_payload["username"]
     if body.algorithm.upper() == "AES-GCM-256":
-        log_action("ENRCYPT_AES", username, body.key_id, body.plaintext_b64)
+        log_action("ENRCYPT_AES", username, body.key_id, f"plaintext={body.plaintext_b64}")
         return encryptAES(rec, plaintext)
     elif body.algorithm.upper() == "RSA-OAEP":
-        log_action("ENRCYPT_RSA", username, body.key_id, body.plaintext_b64)
+        log_action("ENRCYPT_RSA", username, body.key_id, f"plaintext={body.plaintext_b64}")
         return encryptRSA(rec, plaintext)
     else:
         raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
     
 @app.post("/api/hmac")
-def generate_hmac(body: HMACBody):
+def generate_hmac(body: HMACBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     r = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -366,7 +354,8 @@ def generate_hmac(body: HMACBody):
     mac = hmac.new(secret, body.message.encode(), hashlib.sha384).digest()
     mac_b64 = base64.b64encode(mac).decode()
     
-    log_action("GENERATE_HMAC", r.id, "algorithm=HMAC-SHA384")
+    username = token_payload["username"]
+    log_action("GENERATE_HMAC", username, r.id, f"message={body.message}")
     return {
         "key_id": r.id,
         "algorithm": "HMAC-SHA384",
@@ -396,7 +385,7 @@ def signRSA(rec, message: bytes):
     }
 
 @app.post("/api/sign")
-def sign_message(body: SignBody):
+def sign_message(body: SignBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -407,9 +396,11 @@ def sign_message(body: SignBody):
         raise HTTPException(400, "Unsupported algorithm. Use RSA-PSS")
 
     message = base64.b64decode(body.message_b64)
+    username = token_payload["username"]
+    log_action("SIGN_RSA", username, body.key_id, f"message={body.message_b64}")
     return signRSA(rec, message)
 
-def verifyRSA(rec, message: bytes, signature: bytes):
+def verifyRSA(rec, message: bytes, signature: bytes, username):
     if rec.kind != "ASYMMETRIC":
         raise HTTPException(400, "Selected key is not asymmetric")
 
@@ -426,12 +417,12 @@ def verifyRSA(rec, message: bytes, signature: bytes):
             ),
             hashes.SHA256()
         )
-        return {"valid": True}
+        return True
     except Exception:
-        return {"valid": False}
+        return False
     
 @app.post("/api/verify")
-def verify_message(body: VerifyBody):
+def verify_message(body: VerifyBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -443,4 +434,8 @@ def verify_message(body: VerifyBody):
 
     message = base64.b64decode(body.message_b64)
     signature = base64.b64decode(body.signature_b64)
-    return verifyRSA(rec, message, signature)
+    username = token_payload["username"]
+    valid = verifyRSA(rec, message, signature, username)
+
+    log_action("VERIFY_RSA", username, details=f"signature={body.signature_b64}, message={body.message_b64}, valid={valid}")
+    return { "valid" : valid }

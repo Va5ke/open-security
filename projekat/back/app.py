@@ -20,12 +20,10 @@ engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
-
 class EncryptBody(BaseModel):
     key_id: int
     algorithm: str
     plaintext_b64: str
-
 
 class SignBody(BaseModel):
     key_id: int
@@ -37,8 +35,6 @@ class VerifyBody(BaseModel):
     algorithm: str
     message_b64: str
     signature_b64: str
-
-
 
 JWT_SECRET = "bakinatajna"
 JWT_ALGORITHM = "HS256"
@@ -71,8 +67,6 @@ class KeyRecord(Base):
     public_key = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-
-
 class KeyVersion(Base):
     __tablename__ = "key_versions"
     id = Column(Integer, primary_key=True, index=True)
@@ -85,7 +79,6 @@ class KeyVersion(Base):
 
 KeyRecord.versions = relationship("KeyVersion", back_populates="key", cascade="all, delete-orphan")
 
-
 class AuditLog(Base):
     __tablename__ = "logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -94,7 +87,6 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=datetime.now())
     details = Column(Text, nullable=True)
     username = Column(Text)
-
 
 Base.metadata.create_all(bind=engine)
 
@@ -281,7 +273,7 @@ def rotate_key(key_id: int, body: RotateBody, token_payload: dict = Depends(requ
     db.refresh(rec)
     db.close()
     username = token_payload["username"]
-    log_action("ROTATE_KEY", username, key_id, body.new_master_key_b64)
+    log_action("ROTATE_KEY", username, key_id, f"new key={body.new_key_b64}")
 
     return {
         "id": rec.id,
@@ -344,16 +336,16 @@ def encrypt_data(body: EncryptBody, token_payload: dict = Depends(require_roles(
 
     username = token_payload["username"]
     if body.algorithm.upper() == "AES-GCM-256":
-        log_action("ENRCYPT_AES", username, body.key_id, body.plaintext_b64)
+        log_action("ENRCYPT_AES", username, body.key_id, f"plaintext={body.plaintext_b64}")
         return encryptAES(rec, plaintext)
     elif body.algorithm.upper() == "RSA-OAEP":
-        log_action("ENRCYPT_RSA", username, body.key_id, body.plaintext_b64)
+        log_action("ENRCYPT_RSA", username, body.key_id, f"plaintext={body.plaintext_b64}")
         return encryptRSA(rec, plaintext)
     else:
         raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
     
 @app.post("/api/hmac")
-def generate_hmac(body: HMACBody):
+def generate_hmac(body: HMACBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     r = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -366,7 +358,8 @@ def generate_hmac(body: HMACBody):
     mac = hmac.new(secret, body.message.encode(), hashlib.sha384).digest()
     mac_b64 = base64.b64encode(mac).decode()
     
-    log_action("GENERATE_HMAC", r.id, "algorithm=HMAC-SHA384")
+    username = token_payload["username"]
+    log_action("GENERATE_HMAC", username, r.id, f"message={body.message}")
     return {
         "key_id": r.id,
         "algorithm": "HMAC-SHA384",
@@ -396,7 +389,7 @@ def signRSA(rec, message: bytes):
     }
 
 @app.post("/api/sign")
-def sign_message(body: SignBody):
+def sign_message(body: SignBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -407,9 +400,11 @@ def sign_message(body: SignBody):
         raise HTTPException(400, "Unsupported algorithm. Use RSA-PSS")
 
     message = base64.b64decode(body.message_b64)
+    username = token_payload("username")
+    log_action("SIGN_RSA", username, body.key_id, f"message={body.message_b64}")
     return signRSA(rec, message)
 
-def verifyRSA(rec, message: bytes, signature: bytes):
+def verifyRSA(rec, message: bytes, signature: bytes, username):
     if rec.kind != "ASYMMETRIC":
         raise HTTPException(400, "Selected key is not asymmetric")
 
@@ -426,12 +421,12 @@ def verifyRSA(rec, message: bytes, signature: bytes):
             ),
             hashes.SHA256()
         )
-        return {"valid": True}
+        return True
     except Exception:
-        return {"valid": False}
+        return False
     
 @app.post("/api/verify")
-def verify_message(body: VerifyBody):
+def verify_message(body: VerifyBody, token_payload: dict = Depends(require_roles(["user"]))):
     db = SessionLocal()
     rec = db.query(KeyRecord).filter(KeyRecord.id == body.key_id).first()
     db.close()
@@ -443,4 +438,8 @@ def verify_message(body: VerifyBody):
 
     message = base64.b64decode(body.message_b64)
     signature = base64.b64decode(body.signature_b64)
-    return verifyRSA(rec, message, signature)
+    username = token_payload["username"]
+    valid = verifyRSA(rec, message, signature, username)
+
+    log_action("VERIFY_RSA", username, details=f"signature={body.signature_b64}, message={body.message_b64}, valid={valid}")
+    return { "valid" : valid }

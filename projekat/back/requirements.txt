@@ -1,6 +1,7 @@
-fastapi==0.111.1
-uvicorn[standard]==0.23.2
-psycopg2-binary==2.9.9
-SQLAlchemy==2.0.22
-cryptography==41.0.3
-pydantic==2.7.0
+fastapi
+uvicorn[standard]
+psycopg2-binary
+SQLAlchemy
+cryptography
+pydantic
+PyJWT

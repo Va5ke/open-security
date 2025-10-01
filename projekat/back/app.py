@@ -1,5 +1,5 @@
-import os, base64, time
-from fastapi import FastAPI, HTTPException, Query
+import os, base64, time, jwt
+from fastapi import FastAPI, HTTPException, Query, Header, Depends, Body
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
@@ -8,18 +8,44 @@ from datetime import datetime
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from typing import List
+from datetime import datetime, timedelta
+
 
 MASTER_KEY_B64 = "OAn1NzvF8BSeHVc4I85m9XVRpGm8T8KpAfD7TqgmXfE="
-DATABASE_URL = "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms"
+# DATABASE_URL = "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms"
+DATABASE_URL = "postgresql+psycopg2://postgres:njusko123@localhost:5432/kms"
 
 engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
+
 class EncryptBody(BaseModel):
     key_id: int
     algorithm: str
     plaintext_b64: str
+
+JWT_SECRET = "bakinatajna"
+JWT_ALGORITHM = "HS256"
+JWT_EXP_MINUTES = 60
+
+def require_roles(allowed_roles: List[str]):
+    def dependency(authorization: str = Header(...)):
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        role = payload.get("role")
+        if role not in allowed_roles:
+            raise HTTPException(status_code=403, detail=f"Role '{role}' not allowed")
+        return payload
+    return dependency
+
 
 class KeyRecord(Base):
     __tablename__ = "keys"
@@ -30,6 +56,7 @@ class KeyRecord(Base):
     encrypted_secret = Column(Text)
     public_key = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
 
 class KeyVersion(Base):
@@ -45,6 +72,15 @@ class KeyVersion(Base):
 KeyRecord.versions = relationship("KeyVersion", back_populates="key", cascade="all, delete-orphan")
 
 
+class AuditLog(Base):
+    __tablename__ = "logs"
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String, index=True)        
+    key_id = Column(Integer, nullable=True)    
+    timestamp = Column(DateTime, default=datetime.now())
+    details = Column(Text, nullable=True)
+
+
 Base.metadata.create_all(bind=engine)
 
 if not MASTER_KEY_B64:
@@ -55,6 +91,13 @@ if len(MASTER_KEY) != 32:
     raise RuntimeError("MASTER_KEY_B64 must decode to 32 bytes (AES-256).")
 
 app = FastAPI(title="Key Management API (Postgres)")
+
+def log_action(action: str, key_id: int = None, details: str = None):
+    db = SessionLocal()
+    log = AuditLog(action=action, key_id=key_id, details=details)
+    db.add(log)
+    db.commit()
+    db.close()
 
 def aesgcm_encrypt(master_key: bytes, plaintext: bytes) -> str:
     aesgcm = AESGCM(master_key)
@@ -79,8 +122,25 @@ class CreateAsym(BaseModel):
 class RotateBody(BaseModel):
     new_master_key_b64: str
 
+class TokenRequest(BaseModel):
+    username: str
+    role: str
+
+@app.post("/api/token")
+def get_token(req: TokenRequest = Body(...)):
+    if req.role not in ["admin", "viewer"]:
+        raise HTTPException(400, "Role must be 'admin' or 'viewer'")
+    
+    payload = {
+        "username": req.username,
+        "role": req.role,
+        "exp": datetime.utcnow() + timedelta(minutes=JWT_EXP_MINUTES)
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return {"token": token}
+
 @app.post("/api/keys/symmetric")
-def create_symmetric(body: CreateSym):
+def create_symmetric(body: CreateSym, _: dict = Depends(require_roles(["admin"]))):
     bits = body.bits or 256
     if bits not in (128, 192, 256):
         raise HTTPException(400, "bits must be 128, 192, or 256")
@@ -93,10 +153,11 @@ def create_symmetric(body: CreateSym):
         encrypted_secret=enc
     )
     db = SessionLocal(); db.add(rec); db.commit(); db.refresh(rec); db.close()
+    log_action("CREATE_KEY", rec.id, f"algorithm={rec.algorithm}")
     return {"id": rec.id, "name": rec.name, "kind": rec.kind, "algorithm": rec.algorithm, "created_at": rec.created_at}
 
 @app.post("/api/keys/asymmetric")
-def create_asymmetric(body: CreateAsym):
+def create_asymmetric(body: CreateAsym, _: dict = Depends(require_roles(["admin"]))):
     bits = body.bits or 2048
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=bits)
     priv_bytes = private_key.private_bytes(
@@ -118,10 +179,11 @@ def create_asymmetric(body: CreateAsym):
         public_key=base64.b64encode(pub_bytes).decode()
     )
     db = SessionLocal(); db.add(rec); db.commit(); db.refresh(rec); db.close()
+    log_action("CREATE_KEY", rec.id, f"algorithm={rec.algorithm}")
     return {"id": rec.id, "name": rec.name, "kind": rec.kind, "algorithm": rec.algorithm, "created_at": rec.created_at}
 
 @app.get("/api/keys")
-def list_keys():
+def list_keys(_: dict = Depends(require_roles(["admin"]))):
     db = SessionLocal()
     rows = db.query(KeyRecord).all()
     out = [
@@ -135,16 +197,18 @@ def list_keys():
         } for r in rows
     ]
     db.close()
+    log_action("LIST_KEYS", details=f"count={len(out)}")
     return out
 
 @app.get("/api/keys/{key_id}")
-def get_key(key_id: int, reveal: bool = Query(False)):
+def get_key(key_id: int, reveal: bool = Query(False), _: dict = Depends(require_roles(["admin"]))):
     db = SessionLocal()
     r = db.query(KeyRecord).filter(KeyRecord.id == key_id).first()
     db.close()
     if not r:
         raise HTTPException(404, "Not found")
     if not reveal:
+        log_action("GET_KEY_METADATA", r.id)
         return {
             "id": r.id,
             "name": r.name,
@@ -154,6 +218,7 @@ def get_key(key_id: int, reveal: bool = Query(False)):
             "created_at": r.created_at
         }
     secret = aesgcm_decrypt(MASTER_KEY, r.encrypted_secret)
+    log_action("REVEAL_KEY", r.id)
     return {
         "id": r.id,
         "name": r.name,
@@ -163,7 +228,6 @@ def get_key(key_id: int, reveal: bool = Query(False)):
         "public_key": r.public_key,
         "created_at": r.created_at
     }
-
 
 
 @app.post("/api/keys/{key_id}/rotate")
@@ -265,4 +329,5 @@ def encrypt_data(body: EncryptBody):
     else:
         raise HTTPException(400, "Unsupported algorithm. Use AES-GCM-256 or RSA-OAEP")
     
+
 

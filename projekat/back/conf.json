@@ -1,7 +1,0 @@
-{
-    "MASTER_KEY_B64": "OAn1NzvF8BSeHVc4I85m9XVRpGm8T8KpAfD7TqgmXfE=",
-
-    "DATABASE_URL": "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms",
-
-    "JWT_SECRET": "bakinatajna"
-}

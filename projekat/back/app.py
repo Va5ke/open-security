@@ -11,11 +11,14 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from typing import List
 from datetime import datetime, timedelta
+import json
 
 
-MASTER_KEY_B64 = "OAn1NzvF8BSeHVc4I85m9XVRpGm8T8KpAfD7TqgmXfE="
-DATABASE_URL = "postgresql+psycopg2://postgres:opendoors@localhost:5432/kms"
-# DATABASE_URL = "postgresql+psycopg2://postgres:njusko123@localhost:5432/kms"
+with open(".\conf.json") as f:
+    conf = json.load(f)
+
+MASTER_KEY_B64 = conf["MASTER_KEY_B64"]
+DATABASE_URL = conf["DATABASE_URL"]
 
 engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -37,7 +40,7 @@ class VerifyBody(BaseModel):
     message_b64: str
     signature_b64: str
 
-JWT_SECRET = "bakinatajna"
+JWT_SECRET = conf["JWT_SECRET"]
 JWT_ALGORITHM = "HS256"
 JWT_EXP_MINUTES = 60
 
